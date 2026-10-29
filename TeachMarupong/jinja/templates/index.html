@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard{% endblock %}
+
+{% block content %}
+<section class="summary">
+    <p>Items: <strong id="total-count">{{ items | length }}</strong></p>
+</section>
+
+<form action="{{ url_for('add_item') }}" method="POST" class="add-form">
+    <input type="text" name="name" required>
+    <input type="number" name="amount" required>
+    <button type="submit">Add</button>
+</form>    
+<table>
+    <thread>
+        <th>#</th>
+        <th>name</th>
+        <th>amount</th>
+        <th>status</th>
+        <th>action</th>
+    </thread>
+    <tbody id="items-list">
+        {% for item in items %}
+    <tr id="row-{{ item.id }}">
+        <td>{{ loop.index }}</td>
+        <td>{{ item.name | title }}</td>
+        <td>{{ item.amount }}</td>
+        <td>{{ item.status }}</td>
+        <td>
+            {% if item.amount == 0 %}
+            <span>No items</span>
+            {% elif item.amount < 3 %}
+            <span>Low stock</span>
+            {% endif %}
+        </td>
+        <td>
+            <button data-id="{{ item.id }}" class="delete-btn">Delete</button>
+        </td>
+        </tr>
+        {% else %}
+        
+        
+
+    </tbody>
+
+
+
+
+
+
+
+</table>
+
+
+
+{% endblock %}

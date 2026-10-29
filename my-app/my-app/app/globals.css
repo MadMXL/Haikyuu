@@ -1,0 +1,44 @@
+@import "tailwindcss";
+
+/* in the base layer so Tailwind classes on a page can override these defaults */
+@layer base {
+  body {
+    font-family: ui-sans-serif, system-ui, sans-serif;
+    background: #ffffff;
+    color: #111111;
+  }
+
+  input {
+    border: none;
+    border-bottom: 1px solid #ccc;
+    border-radius: 0;
+    padding: 0.4rem 0.1rem;
+    font-size: 0.95rem;
+    background: transparent;
+    outline: none;
+  }
+
+  input:focus {
+    border-bottom-color: #111111;
+  }
+
+  button {
+    border: none;
+    background: none;
+    padding: 0.2rem 0.4rem;
+    font-size: 0.9rem;
+    color: #111111;
+    cursor: pointer;
+    text-decoration: underline;
+  }
+
+  button:hover:not(:disabled) {
+    color: #555;
+  }
+
+  button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    text-decoration: none;
+  }
+}

@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GraphQL Products</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 720px; margin: 2rem auto; padding: 0 16px; background: #f7f7f9; color: #222; }
+    h1 { margin-bottom: .25rem; }
+    .card { background: #fff; border: 1px solid #ddd; border-radius: 8px; padding: 1rem; margin: 1rem 0; }
+    form { display: flex; gap: .5rem; flex-wrap: wrap; }
+    input { padding: .45rem; border: 1px solid #bbb; border-radius: 4px; flex: 1; min-width: 120px; }
+    button { padding: .45rem .9rem; border: 0; border-radius: 4px; background: #e10098; color: #fff; cursor: pointer; }
+    button.secondary { background: #666; }
+    button.danger { background: #c62828; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { text-align: left; padding: .5rem; border-bottom: 1px solid #eee; }
+    td.actions { white-space: nowrap; }
+    #msg { min-height: 1.2em; font-size: .9rem; }
+    .error { color: #c62828; }
+  </style>
+</head>
+<body>
+
+  <div class="card">
+    <h3 id="formTitle">Add product</h3>
+    <form id="productForm">
+      <input type="hidden" id="editId">
+      <input id="name" placeholder="Name" required>
+      <input id="price" type="number" step="0.01" min="0" placeholder="Price" required>
+      <button type="submit" id="submitBtn">Add</button>
+      <button type="button" class="secondary" id="cancelBtn" hidden>Cancel</button>
+    </form>
+    <p id="msg"></p>
+  </div>
+
+  <div class="card">
+    <table>
+      <thead><tr><th>ID</th><th>Name</th><th>Price</th><th></th></tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+  </div>
+
+  <script>
+    async function gql(query, variables = {}) {
+      const res = await fetch("/graphql", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query, variables }),
+      });
+      const json = await res.json();
+      if (json.errors) throw new Error(json.errors.map(e => e.message).join(", "));
+      return json.data;
+    }
+
+    const msg = document.getElementById("msg");
+    function show(text, isError = false) {
+      msg.textContent = text;
+      msg.className = isError ? "error" : "";
+    }
+
+    async function loadProducts() {
+      const data = await gql(`query { products { id name price } }`);
+      const rows = document.getElementById("rows");
+      rows.innerHTML = "";
+      for (const p of data.products) {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `<td>${p.id}</td><td></td><td>${p.price.toFixed(2)}</td>
+          <td class="actions">
+            <button class="secondary" data-edit="${p.id}">Edit</button>
+            <button class="danger" data-del="${p.id}">Delete</button>
+          </td>`;
+        tr.children[1].textContent = p.name; // textContent avoids HTML injection
+        tr.querySelector("[data-edit]").onclick = () => startEdit(p);
+        tr.querySelector("[data-del]").onclick = () => deleteProduct(p.id);
+        rows.appendChild(tr);
+      }
+    }
+
+    function startEdit(p) {
+      document.getElementById("editId").value = p.id;
+      document.getElementById("name").value = p.name;
+      document.getElementById("price").value = p.price;
+      document.getElementById("formTitle").textContent = `Edit product #${p.id}`;
+      document.getElementById("submitBtn").textContent = "Save";
+      document.getElementById("cancelBtn").hidden = false;
+    }
+
+    function resetForm() {
+      document.getElementById("productForm").reset();
+      document.getElementById("editId").value = "";
+      document.getElementById("formTitle").textContent = "Add product";
+      document.getElementById("submitBtn").textContent = "Add";
+      document.getElementById("cancelBtn").hidden = true;
+    }
+
+    document.getElementById("cancelBtn").onclick = resetForm;
+
+    document.getElementById("productForm").onsubmit = async (e) => {
+      e.preventDefault();
+      const id = document.getElementById("editId").value;
+      const input = {
+        name: document.getElementById("name").value.trim(),
+        price: parseFloat(document.getElementById("price").value),
+      };
+      try {
+        if (id) {
+          const d = await gql(
+            `mutation($id: Int!, $input: ProductUpdateInput!) {
+               updateProduct(id: $id, input: $input) { id name price }
+             }`, { id: Number(id), input });
+          show(d.updateProduct ? `Updated #${d.updateProduct.id}` : "Product not found", !d.updateProduct);
+        } else {
+          const d = await gql(
+            `mutation($input: ProductInput!) {
+               createProduct(input: $input) { id name price }
+             }`, { input });
+          show(`Created "${d.createProduct.name}" with id ${d.createProduct.id}`);
+        }
+        resetForm();
+        await loadProducts();
+      } catch (err) {
+        show(err.message, true);
+      }
+    };
+
+    async function deleteProduct(id) {
+      if (!confirm(`Delete product #${id}?`)) return;
+      try {
+        const d = await gql(`mutation($id: Int!) { deleteProduct(id: $id) }`, { id });
+        show(d.deleteProduct ? `Deleted #${id}` : "Product not found", !d.deleteProduct);
+        await loadProducts();
+      } catch (err) {
+        show(err.message, true);
+      }
+    }
+
+    loadProducts().catch(err => show(err.message, true));
+  </script>
+</body>
+</html>

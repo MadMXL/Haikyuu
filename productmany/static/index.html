@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Products &amp; Stores</title>
+<style>
+  body { font-family: sans-serif; margin: 20px; }
+  h2 { margin-top: 30px; }
+  input { padding: 4px; margin: 2px; }
+  button { padding: 4px 8px; margin: 2px; cursor: pointer; }
+  table { border-collapse: collapse; margin-top: 10px; }
+  td, th { border: 1px solid #ccc; padding: 6px 10px; text-align: left; }
+  #msg { color: red; }
+  #login-box { padding: 10px; border: 1px solid #ccc; display: inline-block; }
+  #login-box.logged-in { border-color: green; }
+</style>
+</head>
+<body>
+
+<h1>Products &amp; Stores (many-to-many)</h1>
+<p id="msg"></p>
+
+<div id="login-box">
+  <strong id="login-status">Not logged in</strong><br>
+  <input id="login-username" placeholder="Username" value="admin" />
+  <input id="login-password" type="password" placeholder="Password" value="1234" />
+  <button onclick="login()">Login</button>
+  <button onclick="logout()">Logout</button>
+</div>
+
+<h2>Add product</h2>
+<input id="p-name" placeholder="Name" />
+<input id="p-category" placeholder="Category" />
+<input id="p-price" type="number" placeholder="Price" />
+<button onclick="addProduct()">Add</button>
+
+<h2>Products</h2>
+<table id="products"></table>
+
+<h2>Add store</h2>
+<input id="s-name" placeholder="Store name" />
+<button onclick="addStore()">Add</button>
+
+<h2>Stores</h2>
+<table id="stores"></table>
+
+<script>
+const msg = (t) => { document.getElementById("msg").textContent = t || ""; };
+
+let token = localStorage.getItem("token") || null;
+
+function updateLoginUI() {
+  document.getElementById("login-status").textContent = token ? "Logged in" : "Not logged in";
+  document.getElementById("login-box").classList.toggle("logged-in", !!token);
+}
+
+async function login() {
+  msg("");
+  const username = document.getElementById("login-username").value;
+  const password = document.getElementById("login-password").value;
+  try {
+    const res = await fetch("/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ username, password }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || "Login failed");
+    token = data.access_token;
+    localStorage.setItem("token", token);
+    updateLoginUI();
+  } catch (e) { msg(e.message); }
+}
+
+function logout() {
+  token = null;
+  localStorage.removeItem("token");
+  updateLoginUI();
+}
+
+async function api(path, opts = {}) {
+  const headers = { ...(opts.headers || {}) };
+  if (token) headers["Authorization"] = "Bearer " + token;
+  const res = await fetch(path, { ...opts, headers });
+  const data = await res.json();
+  if (!res.ok) {
+    if (res.status === 401) msg("Please log in to do that.");
+    throw new Error(data.detail || "Error");
+  }
+  return data;
+}
+
+let allStores = [];
+
+async function load() {
+  msg("");
+  try {
+    const products = await api("/products/");
+    allStores = await api("/stores");
+    renderProducts(products);
+    renderStores();
+  } catch (e) { msg(e.message); }
+}
+
+function renderProducts(products) {
+  let html = "<tr><th>ID</th><th>Name</th><th>Category</th><th>Price</th><th>Stores</th><th>Actions</th></tr>";
+  for (const p of products) {
+    const linked = p.stores.map((s) =>
+      `${s.name} <button onclick="unlink(${p.id},${s.id})">x</button>`).join(", ");
+    const options = allStores.map((s) => `<option value="${s.id}">${s.name}</option>`).join("");
+    html += `<tr>
+      <td>${p.id}</td>
+      <td><input value="${p.name}" id="pn-${p.id}"></td>
+      <td><input value="${p.category}" id="pc-${p.id}"></td>
+      <td><input type="number" value="${p.price}" id="pp-${p.id}" style="width:80px"></td>
+      <td>${linked || "-"}<br>
+        <select id="ps-${p.id}"><option value="">-- store --</option>${options}</select>
+        <button onclick="link(${p.id})">sell here</button>
+      </td>
+      <td>
+        <button onclick="saveProduct(${p.id})">Save</button>
+        <button onclick="deleteProduct(${p.id})">Delete</button>
+      </td>
+    </tr>`;
+  }
+  document.getElementById("products").innerHTML = html;
+}
+
+function renderStores() {
+  let html = "<tr><th>ID</th><th>Name</th><th>Actions</th></tr>";
+  for (const s of allStores) {
+    html += `<tr><td>${s.id}</td><td>${s.name}</td>
+      <td><button onclick="deleteStore(${s.id})">Delete</button></td></tr>`;
+  }
+  document.getElementById("stores").innerHTML = html;
+}
+
+async function addProduct() {
+  const body = {
+    name: document.getElementById("p-name").value,
+    category: document.getElementById("p-category").value,
+    price: Number(document.getElementById("p-price").value),
+  };
+  try {
+    await api("/products/", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    document.getElementById("p-name").value = "";
+    document.getElementById("p-category").value = "";
+    document.getElementById("p-price").value = "";
+    load();
+  } catch (e) { msg(e.message); }
+}
+
+async function saveProduct(id) {
+  const body = {
+    name: document.getElementById("pn-" + id).value,
+    category: document.getElementById("pc-" + id).value,
+    price: Number(document.getElementById("pp-" + id).value),
+  };
+  try {
+    await api("/products/" + id, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    load();
+  } catch (e) { msg(e.message); }
+}
+
+async function deleteProduct(id) {
+  try { await api("/products/" + id, { method: "DELETE" }); load(); } catch (e) { msg(e.message); }
+}
+
+async function addStore() {
+  const body = { name: document.getElementById("s-name").value };
+  try {
+    await api("/stores", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    document.getElementById("s-name").value = "";
+    load();
+  } catch (e) { msg(e.message); }
+}
+
+async function deleteStore(id) {
+  try { await api("/stores/" + id, { method: "DELETE" }); load(); } catch (e) { msg(e.message); }
+}
+
+async function link(pid) {
+  const sid = document.getElementById("ps-" + pid).value;
+  if (!sid) return;
+  try { await api(`/products/${pid}/stores/${sid}`, { method: "POST" }); load(); } catch (e) { msg(e.message); }
+}
+
+async function unlink(pid, sid) {
+  try { await api(`/products/${pid}/stores/${sid}`, { method: "DELETE" }); load(); } catch (e) { msg(e.message); }
+}
+
+updateLoginUI();
+load();
+</script>
+
+</body>
+</html>
