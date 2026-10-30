@@ -1,4 +1,4 @@
-# STEPS 9-10 — the browser side, and what happens on disconnect (see README.md)
+# STEP 5 — the browser side, and what happens on disconnect (see README.md)
 #
 # Run:   uvicorn client_version:app --reload --port 8002
 # Open:  http://127.0.0.1:8002/
